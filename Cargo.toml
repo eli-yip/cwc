@@ -1,0 +1,16 @@
+[package]
+name = "cwc"
+version = "1.0.1"
+edition = "2024"
+description = "A word counter utility that properly handles CJK and Unicode text"
+license = "MIT"
+repository = "https://github.com/eli-yip/cwc"
+readme = "README.md"
+
+[[bin]]
+name = "cwc"
+path = "src/main.rs"
+
+[dependencies]
+atty = "0.2.14"
+unicode-segmentation = "1.12.0"
