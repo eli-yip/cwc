@@ -1,10 +1,19 @@
-use std::env;
 use std::fs;
 use std::io::{self, IsTerminal, Read};
 use std::process;
+
+use clap::{CommandFactory, Parser};
 use unicode_segmentation::UnicodeSegmentation;
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// A word counter that properly handles CJK and Unicode text.
+///
+/// Counts the given files, or reads from stdin when no file is given.
+#[derive(Parser)]
+#[command(name = "cwc", version, about)]
+struct Cli {
+    /// Files to count; reads from stdin when none are given
+    files: Vec<String>,
+}
 
 struct FileStats {
     filename: String,
@@ -12,17 +21,16 @@ struct FileStats {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let cli = Cli::parse();
 
-    // Check for version flag
-    if args.len() > 1 && args[1] == "-v" {
-        println!("cwc version {}", VERSION);
-        return;
-    }
+    if cli.files.is_empty() {
+        // No files: read from stdin when piped, otherwise show help.
+        if io::stdin().is_terminal() {
+            Cli::command().print_help().expect("failed to print help");
+            println!();
+            return;
+        }
 
-    // Check if we're reading from stdin (pipe)
-    if !io::stdin().is_terminal() {
-        // Reading from pipe
         let mut buffer = String::new();
         io::stdin()
             .read_to_string(&mut buffer)
@@ -31,16 +39,7 @@ fn main() {
                 process::exit(1);
             });
 
-        let count = count_words(&buffer);
-        println!("Word count: {}", count);
-        return;
-    }
-
-    // If no files provided, show usage
-    if args.len() < 2 {
-        println!("Usage: {} [file1] [file2] ... [fileN]", args[0]);
-        println!("       or pipe text to the program");
-        println!("       Use -v to display version");
+        println!("Word count: {}", count_words(&buffer));
         return;
     }
 
@@ -49,7 +48,7 @@ fn main() {
     let mut total_words = 0;
     let mut had_error = false;
 
-    for filename in &args[1..] {
+    for filename in &cli.files {
         match fs::read_to_string(filename) {
             Ok(content) => {
                 let count = count_words(&content);

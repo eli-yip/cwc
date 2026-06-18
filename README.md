@@ -42,5 +42,5 @@ echo "Some text to count" | cwc
 ### Display version:
 
 ```bash
-cwc -v
+cwc -V
 ```
