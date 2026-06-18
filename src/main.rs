@@ -78,3 +78,39 @@ fn main() {
 fn count_words(text: &str) -> usize {
     text.unicode_words().count()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::count_words;
+
+    #[test]
+    fn counts_ascii_words() {
+        assert_eq!(count_words("hello world"), 2);
+    }
+
+    #[test]
+    fn counts_each_cjk_character_as_a_word() {
+        assert_eq!(count_words("你好世界"), 4);
+    }
+
+    #[test]
+    fn counts_mixed_cjk_and_ascii() {
+        assert_eq!(count_words("hello 世界"), 3);
+    }
+
+    #[test]
+    fn ignores_punctuation_and_symbols() {
+        assert_eq!(count_words("hello, world! 你好。"), 4);
+    }
+
+    #[test]
+    fn empty_and_whitespace_only_count_zero() {
+        assert_eq!(count_words(""), 0);
+        assert_eq!(count_words("   \t\n  "), 0);
+    }
+
+    #[test]
+    fn collapses_repeated_whitespace() {
+        assert_eq!(count_words("a   b\t\tc\nd"), 4);
+    }
+}
