@@ -31,15 +31,15 @@ fn main() {
             return;
         }
 
-        let mut buffer = String::new();
-        io::stdin()
-            .read_to_string(&mut buffer)
-            .unwrap_or_else(|err| {
-                eprintln!("Error reading from stdin: {}", err);
-                process::exit(1);
-            });
+        let mut buffer = Vec::new();
+        io::stdin().read_to_end(&mut buffer).unwrap_or_else(|err| {
+            eprintln!("Error reading from stdin: {}", err);
+            process::exit(1);
+        });
 
-        println!("(stdin): {} words", count_words(&buffer));
+        // Tolerate invalid UTF-8 by replacing bad sequences instead of failing.
+        let content = String::from_utf8_lossy(&buffer);
+        println!("(stdin): {} words", count_words(&content));
         return;
     }
 
@@ -49,8 +49,10 @@ fn main() {
     let mut had_error = false;
 
     for filename in &cli.files {
-        match fs::read_to_string(filename) {
-            Ok(content) => {
+        match fs::read(filename) {
+            Ok(bytes) => {
+                // Tolerate invalid UTF-8 by replacing bad sequences instead of failing.
+                let content = String::from_utf8_lossy(&bytes);
                 let count = count_words(&content);
                 total_words += count;
                 file_stats.push(FileStats {
@@ -118,5 +120,12 @@ mod tests {
     #[test]
     fn collapses_repeated_whitespace() {
         assert_eq!(count_words("a   b\t\tc\nd"), 4);
+    }
+
+    #[test]
+    fn lossy_replacement_of_invalid_utf8_does_not_inflate_count() {
+        // 0xFF is not valid UTF-8 and becomes U+FFFD, which is not a word.
+        let content = String::from_utf8_lossy(b"hello \xFF world");
+        assert_eq!(count_words(&content), 2);
     }
 }
