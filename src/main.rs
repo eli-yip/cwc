@@ -39,7 +39,7 @@ fn main() {
                 process::exit(1);
             });
 
-        println!("Word count: {}", count_words(&buffer));
+        println!("(stdin): {} words", count_words(&buffer));
         return;
     }
 
