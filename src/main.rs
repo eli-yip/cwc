@@ -47,6 +47,7 @@ fn main() {
     // Process each file
     let mut file_stats: Vec<FileStats> = Vec::new();
     let mut total_words = 0;
+    let mut had_error = false;
 
     for filename in &args[1..] {
         match fs::read_to_string(filename) {
@@ -60,6 +61,7 @@ fn main() {
             }
             Err(err) => {
                 eprintln!("Error reading file '{}': {}", filename, err);
+                had_error = true;
             }
         }
     }
@@ -72,6 +74,11 @@ fn main() {
     // If more than one file was processed, show total
     if file_stats.len() > 1 {
         println!("Total: {} words", total_words);
+    }
+
+    // Signal failure if any file could not be read
+    if had_error {
+        process::exit(1);
     }
 }
 
