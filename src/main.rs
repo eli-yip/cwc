@@ -1,10 +1,10 @@
 use std::env;
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, IsTerminal, Read};
 use std::process;
 use unicode_segmentation::UnicodeSegmentation;
 
-const VERSION: &str = "1.0.2";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 struct FileStats {
     filename: String,
@@ -21,7 +21,7 @@ fn main() {
     }
 
     // Check if we're reading from stdin (pipe)
-    if !atty::is(atty::Stream::Stdin) {
+    if !io::stdin().is_terminal() {
         // Reading from pipe
         let mut buffer = String::new();
         io::stdin()
