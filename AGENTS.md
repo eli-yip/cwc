@@ -30,3 +30,12 @@ a change genuinely warrants splitting modules.
    Keep each commit small and focused rather than bundling unrelated changes.
 2. Keep the dependency footprint minimal. This is a leaf utility — prefer the
    standard library over adding a crate, and justify any new dependency.
+
+## Releasing
+
+- Cut releases with [`cargo-release`](https://github.com/crate-ci/cargo-release),
+  e.g. `cargo release patch` / `minor` / `major`. It bumps the version, makes the
+  `chore: Release ...` commit, tags, pushes, and publishes to crates.io — do not
+  bump the version, tag, or `cargo publish` by hand.
+- Land the feature commits first; run `cargo release` only once the working tree
+  is clean and `just lint` / `just test` pass.
