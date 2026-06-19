@@ -1,13 +1,16 @@
 use std::fs;
 use std::io::{self, IsTerminal, Read};
+use std::path::{Path, PathBuf};
 use std::process;
 
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 use unicode_segmentation::UnicodeSegmentation;
 
 /// A word counter that properly handles CJK and Unicode text.
 ///
-/// Counts the given files, or reads from stdin when no file is given.
+/// Counts the given files, or reads from stdin when piped. With no arguments and
+/// no piped input, recursively counts every UTF-8 text file under the current
+/// directory.
 #[derive(Parser)]
 #[command(name = "cwc", version, about)]
 struct Cli {
@@ -20,17 +23,23 @@ struct FileStats {
     word_count: usize,
 }
 
+/// How a file was selected, which governs how invalid UTF-8 and read errors
+/// are handled.
+#[derive(Clone, Copy, PartialEq)]
+enum Mode {
+    /// Files named on the command line: count even invalid UTF-8 (lossily) and
+    /// fail the process if any file cannot be read.
+    Explicit,
+    /// Files discovered by walking a directory: silently skip non-UTF-8 (binary)
+    /// files and tolerate per-file read errors.
+    Directory,
+}
+
 fn main() {
     let cli = Cli::parse();
 
-    if cli.files.is_empty() {
-        // No files: read from stdin when piped, otherwise show help.
-        if io::stdin().is_terminal() {
-            Cli::command().print_help().expect("failed to print help");
-            println!();
-            return;
-        }
-
+    // No file arguments and input is piped: count the stdin stream.
+    if cli.files.is_empty() && !io::stdin().is_terminal() {
         let mut buffer = Vec::new();
         io::stdin().read_to_end(&mut buffer).unwrap_or_else(|err| {
             eprintln!("Error reading from stdin: {}", err);
@@ -43,43 +52,96 @@ fn main() {
         return;
     }
 
-    // Process each file
+    // Otherwise build a list of files, then read them all the same way.
+    let (files, mode) = if cli.files.is_empty() {
+        // No arguments: recursively count every text file under the current dir.
+        let mut files = Vec::new();
+        if let Err(err) = collect_files(Path::new("."), &mut files) {
+            eprintln!("Error reading directory: {}", err);
+            process::exit(1);
+        }
+        files.sort();
+        (files, Mode::Directory)
+    } else {
+        (
+            cli.files.iter().map(PathBuf::from).collect(),
+            Mode::Explicit,
+        )
+    };
+
+    process_files(&files, mode);
+}
+
+/// Read and count each file, then report per-file counts and a total.
+fn process_files(files: &[PathBuf], mode: Mode) {
     let mut file_stats: Vec<FileStats> = Vec::new();
-    let mut total_words = 0;
     let mut had_error = false;
 
-    for filename in &cli.files {
-        match fs::read(filename) {
-            Ok(bytes) => {
-                // Tolerate invalid UTF-8 by replacing bad sequences instead of failing.
-                let content = String::from_utf8_lossy(&bytes);
-                let count = count_words(&content);
-                total_words += count;
-                file_stats.push(FileStats {
-                    filename: filename.clone(),
-                    word_count: count,
-                });
-            }
+    for path in files {
+        let bytes = match fs::read(path) {
+            Ok(bytes) => bytes,
             Err(err) => {
-                eprintln!("Error reading file '{}': {}", filename, err);
+                eprintln!("Error reading file '{}': {}", path.display(), err);
                 had_error = true;
+                continue;
             }
-        }
+        };
+
+        let count = match String::from_utf8(bytes) {
+            Ok(text) => count_words(&text),
+            // Skip binary files when walking a directory; for an explicitly named
+            // file, replace the bad sequences instead of failing.
+            Err(err) => match mode {
+                Mode::Directory => continue,
+                Mode::Explicit => count_words(&String::from_utf8_lossy(err.as_bytes())),
+            },
+        };
+
+        file_stats.push(FileStats {
+            filename: path.display().to_string(),
+            word_count: count,
+        });
     }
 
-    // Display results
-    for stats in &file_stats {
+    if file_stats.is_empty() && mode == Mode::Directory {
+        println!("No UTF-8 text files found.");
+    } else {
+        report(&file_stats);
+    }
+
+    // Only an explicitly requested file makes a read failure fatal.
+    if had_error && mode == Mode::Explicit {
+        process::exit(1);
+    }
+}
+
+/// Collect regular files under `dir`, recursing into subdirectories. Hidden
+/// entries (those starting with '.', e.g. `.git`) are skipped.
+fn collect_files(dir: &Path, files: &mut Vec<PathBuf>) -> io::Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        if entry.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            collect_files(&entry.path(), files)?;
+        } else if file_type.is_file() {
+            files.push(entry.path());
+        }
+    }
+    Ok(())
+}
+
+/// Print per-file counts, plus a total when more than one file was counted.
+fn report(file_stats: &[FileStats]) {
+    for stats in file_stats {
         println!("{}: {} words", stats.filename, stats.word_count);
     }
 
-    // If more than one file was processed, show total
     if file_stats.len() > 1 {
-        println!("Total: {} words", total_words);
-    }
-
-    // Signal failure if any file could not be read
-    if had_error {
-        process::exit(1);
+        let total: usize = file_stats.iter().map(|s| s.word_count).sum();
+        println!("Total: {} words", total);
     }
 }
 

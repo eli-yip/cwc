@@ -7,6 +7,7 @@ A simple command-line utility written in Rust that counts words in text files, w
 - Properly counts words in text containing CJK characters, ignoring punctuation marks.
 - Supports reading from files or stdin (pipe)
 - Can process multiple files at once
+- Run with no arguments to recursively count every UTF-8 text file in the current directory
 
 ## Installation
 
@@ -27,6 +28,15 @@ cwc filename.txt
 ```bash
 cwc file1.txt file2.txt file3.txt
 ```
+
+### Count every text file in the current directory:
+
+```bash
+cwc
+```
+
+Recurses into subdirectories, skips hidden entries (e.g. `.git`) and non-UTF-8
+(binary) files, and prints a total.
 
 ### Count words from stdin (pipe):
 
